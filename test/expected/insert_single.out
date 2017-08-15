@@ -300,6 +300,23 @@ SELECT "1dim" FROM "1dim";
  ("Fri Jan 20 09:00:59 2017",29.2)
 (4 rows)
 
+--test that we can insert pre-1970 dates
+CREATE TABLE "1dim_pre1970"(time timestamp PRIMARY KEY, temp float);
+SELECT create_hypertable('"1dim_pre1970"', 'time');
+ create_hypertable 
+-------------------
+ 
+(1 row)
+
+INSERT INTO "1dim_pre1970" VALUES('1965-01-20T09:00:21', 21.2);
+INSERT INTO "1dim_pre1970" VALUES('1965-01-20T09:00:47', 25.1);
+SELECT * FROM "1dim_pre1970";
+           time           | temp 
+--------------------------+------
+ Wed Jan 20 09:00:21 1965 | 21.2
+ Wed Jan 20 09:00:47 1965 | 25.1
+(2 rows)
+
 -- Create a three-dimensional table
 CREATE TABLE "3dim" (time timestamp, temp float, device text, location text);
 SELECT create_hypertable('"3dim"', 'time', 'device', 2);
@@ -318,8 +335,8 @@ INSERT INTO "3dim" VALUES('2017-01-20T09:00:01', 22.5, 'blue', 'nyc');
 INSERT INTO "3dim" VALUES('2017-01-20T09:00:21', 21.2, 'brown', 'sthlm');
 INSERT INTO "3dim" VALUES('2017-01-20T09:00:47', 25.1, 'yellow', 'la');
 --show the constraints on the three-dimensional chunk
-\d+ _timescaledb_internal._hyper_3_6_chunk
-                       Table "_timescaledb_internal._hyper_3_6_chunk"
+\d+ _timescaledb_internal._hyper_4_6_chunk
+                       Table "_timescaledb_internal._hyper_4_6_chunk"
   Column  |            Type             | Modifiers | Storage  | Stats target | Description 
 ----------+-----------------------------+-----------+----------+--------------+-------------
  time     | timestamp without time zone |           | plain    |              | 
@@ -327,12 +344,12 @@ INSERT INTO "3dim" VALUES('2017-01-20T09:00:47', 25.1, 'yellow', 'la');
  device   | text                        |           | extended |              | 
  location | text                        |           | extended |              | 
 Indexes:
-    "22-3dim_time_idx" btree ("time" DESC)
-    "23-3dim_device_time_idx" btree (device, "time" DESC)
+    "21-3dim_time_idx" btree ("time" DESC)
+    "22-3dim_device_time_idx" btree (device, "time" DESC)
 Check constraints:
-    "constraint_10" CHECK (_timescaledb_internal.get_partition_for_key(location) >= 0 AND _timescaledb_internal.get_partition_for_key(location) < 1073741823)
-    "constraint_5" CHECK ("time" >= 'Sat Dec 24 16:00:00 2016'::timestamp without time zone AND "time" < 'Mon Jan 23 16:00:00 2017'::timestamp without time zone)
-    "constraint_9" CHECK (_timescaledb_internal.get_partition_for_key(device) >= 1073741823 AND _timescaledb_internal.get_partition_for_key(device) < 2147483647)
+    "constraint_6" CHECK ("time" >= 'Sat Dec 24 16:00:00 2016'::timestamp without time zone AND "time" < 'Mon Jan 23 16:00:00 2017'::timestamp without time zone)
+    "constraint_7" CHECK (_timescaledb_internal.get_partition_for_key(device) >= 0 AND _timescaledb_internal.get_partition_for_key(device) < 1073741823)
+    "constraint_8" CHECK (_timescaledb_internal.get_partition_for_key(location) >= 1073741823 AND _timescaledb_internal.get_partition_for_key(location) < 2147483647)
 Inherits: "3dim"
 
 --queries should work in three dimensions
