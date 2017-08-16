@@ -20,6 +20,12 @@ BEGIN
     AFTER UPDATE OR DELETE OR INSERT ON _timescaledb_catalog.chunk
     FOR EACH ROW EXECUTE PROCEDURE _timescaledb_internal.on_change_chunk();
 
+    DROP TRIGGER IF EXISTS trigger_main_on_change_chunk_constraint
+    ON _timescaledb_catalog.chunk_constraint;
+    CREATE TRIGGER trigger_main_on_change_chunk_constraint
+    AFTER UPDATE OR DELETE OR INSERT ON _timescaledb_catalog.chunk_constraint
+    FOR EACH ROW EXECUTE PROCEDURE _timescaledb_internal.on_change_chunk_constraint();
+
     -- no DELETE: it would be a no-op
     DROP TRIGGER IF EXISTS trigger_1_main_on_change_hypertable
     ON _timescaledb_catalog.hypertable;

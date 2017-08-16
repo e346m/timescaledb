@@ -9,12 +9,26 @@
 
 */
 
-CREATE OR REPLACE FUNCTION _timescaledb_internal.ddl_is_change_owner(pg_ddl_command)
+CREATE OR REPLACE FUNCTION _timescaledb_internal.ddl_is_change_owner(pg_ddl_command, int)
    RETURNS bool IMMUTABLE STRICT
    AS '$libdir/timescaledb' LANGUAGE C;
 
-CREATE OR REPLACE FUNCTION _timescaledb_internal.ddl_change_owner_to(pg_ddl_command)
+CREATE OR REPLACE FUNCTION _timescaledb_internal.ddl_is_add_constraint(pg_ddl_command, int)
+   RETURNS bool IMMUTABLE STRICT AS '$libdir/timescaledb' LANGUAGE C;
+CREATE OR REPLACE FUNCTION _timescaledb_internal.ddl_is_drop_constraint(pg_ddl_command, int)
+   RETURNS bool IMMUTABLE STRICT AS '$libdir/timescaledb' LANGUAGE C;
+
+
+CREATE OR REPLACE FUNCTION _timescaledb_internal.ddl_change_owner_to(pg_ddl_command, int)
    RETURNS name IMMUTABLE STRICT
+   AS '$libdir/timescaledb' LANGUAGE C;
+
+CREATE OR REPLACE FUNCTION _timescaledb_internal.ddl_subcmd_name(pg_ddl_command, int)
+   RETURNS name IMMUTABLE STRICT
+   AS '$libdir/timescaledb' LANGUAGE C;
+
+CREATE OR REPLACE FUNCTION _timescaledb_internal.ddl_alter_table_count_subcmds(pg_ddl_command)
+   RETURNS INT IMMUTABLE STRICT
    AS '$libdir/timescaledb' LANGUAGE C;
 
 -- Handles ddl create index commands on hypertables
@@ -49,7 +63,7 @@ BEGIN
                 hypertable_row.schema_name,
                 (SELECT relname FROM pg_class WHERE oid = info.objid::regclass),
                 def
-            );
+            ) WHERE _timescaledb_internal.need_chunk_index(hypertable_row.id, info.objid);
         END LOOP;
 END
 $BODY$;
@@ -187,35 +201,51 @@ $BODY$;
 $BODY$
 DECLARE
     info           record;
+    subcmd              INT;
     new_table_owner           TEXT;
     chunk_row      _timescaledb_catalog.chunk;
     hypertable_row _timescaledb_catalog.hypertable;
+    subcmd_name NAME;
 BEGIN
     --NOTE:  pg_event_trigger_ddl_commands prevents this SECURITY DEFINER function from being called outside trigger.
     FOR info IN SELECT * FROM pg_event_trigger_ddl_commands() LOOP
         IF NOT _timescaledb_internal.is_main_table(info.objid) THEN
-            RETURN;
+            CONTINUE;
         END IF;
 
-        IF _timescaledb_internal.ddl_is_change_owner(info.command) THEN
-            --if change owner then change owners on all chunks
-            new_table_owner := _timescaledb_internal.ddl_change_owner_to(info.command);
-            hypertable_row := _timescaledb_internal.hypertable_from_main_table(info.objid);
+        FOR subcmd IN SELECT generate_series(0, _timescaledb_internal.ddl_alter_table_count_subcmds(info.command) - 1) LOOP
+            IF _timescaledb_internal.ddl_is_change_owner(info.command, subcmd) THEN
+                --if change owner then change owners on all chunks
+                new_table_owner := _timescaledb_internal.ddl_change_owner_to(info.command, subcmd);
+                hypertable_row := _timescaledb_internal.hypertable_from_main_table(info.objid);
 
-            FOR chunk_row IN
-                SELECT *
-                FROM _timescaledb_catalog.chunk
-                WHERE hypertable_id = hypertable_row.id
-                LOOP
-                    EXECUTE format(
-                        $$
-                            ALTER TABLE %1$I.%2$I OWNER TO %3$I
-                        $$,
-                        chunk_row.schema_name, chunk_row.table_name,
-                        new_table_owner
-                    );
-                END LOOP;
-        END IF;
+                FOR chunk_row IN
+                    SELECT *
+                    FROM _timescaledb_catalog.chunk
+                    WHERE hypertable_id = hypertable_row.id
+                    LOOP
+                        EXECUTE format(
+                            $$
+                                ALTER TABLE %1$I.%2$I OWNER TO %3$I
+                            $$,
+                            chunk_row.schema_name, chunk_row.table_name,
+                            new_table_owner
+                        );
+                    END LOOP;
+            END IF;
+            IF _timescaledb_internal.ddl_is_add_constraint(info.command, subcmd) THEN
+                subcmd_name := _timescaledb_internal.ddl_subcmd_name(info.command, subcmd);
+                --subcmd_name is name of constraint
+                hypertable_row := _timescaledb_internal.hypertable_from_main_table(info.objid);
+                PERFORM _timescaledb_internal.add_constraint(hypertable_row.id, subcmd_name);
+            END IF;
+            IF _timescaledb_internal.ddl_is_drop_constraint(info.command, subcmd) THEN
+                subcmd_name := _timescaledb_internal.ddl_subcmd_name(info.command, subcmd);
+                --subcmd_name is name of constraint
+                hypertable_row := _timescaledb_internal.hypertable_from_main_table(info.objid);
+                PERFORM _timescaledb_internal.drop_constraint(hypertable_row.id, subcmd_name);
+            END IF;
+        END LOOP;
     END LOOP;
 END
 $BODY$;

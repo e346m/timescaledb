@@ -257,6 +257,8 @@ enum Anum_chunk_constraint
 {
 	Anum_chunk_constraint_chunk_id = 1,
 	Anum_chunk_constraint_dimension_slice_id,
+    Anum_chunk_constraint_constraint_name,
+	Anum_chunk_constraint_hypertable_constraint_name,
 	_Anum_chunk_constraint_max,
 };
 
@@ -267,6 +269,8 @@ typedef struct FormData_chunk_constraint
 {
 	int32		chunk_id;
 	int32		dimension_slice_id;
+	NameData	constraint_name;
+	NameData	hypertable_constraint_name;
 } FormData_chunk_constraint;
 
 typedef FormData_chunk_constraint *Form_chunk_constraint;
@@ -279,9 +283,9 @@ enum
 
 enum Anum_chunk_constraint_chunk_id_dimension_slice_id_idx
 {
-	Anum_chunk_constraint_chunk_id_dimension_id_idx_chunk_id = 1,
-	Anum_chunk_constraint_chunk_id_dimension_id_idx_dimension_slice_id,
-	_Anum_chunk_constraint_chunk_id_dimension_id_idx_max,
+	Anum_chunk_constraint_chunk_id_dimension_slice_id_idx_chunk_id = 1,
+	Anum_chunk_constraint_chunk_id_dimension_slice_id_idx_dimension_slice_id,
+	_Anum_chunk_constraint_chunk_id_dimension_slice_id_idx_max,
 };
 
 
